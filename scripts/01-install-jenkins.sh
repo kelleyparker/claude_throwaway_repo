@@ -7,11 +7,19 @@ set -euo pipefail
 sudo apt-get update
 sudo apt-get install -y fontconfig openjdk-17-jre git curl ca-certificates gnupg docker.io
 
-# Jenkins LTS apt repo (2023 signing key)
+# Jenkins LTS apt repo. Jenkins rotates its signing key, so fetch every published
+# key (apt accepts a Release signed by any key in the keyring).
 sudo mkdir -p /etc/apt/keyrings
-sudo curl -fsSL https://pkg.jenkins.io/debian-stable/jenkins.io-2023.key \
-  -o /etc/apt/keyrings/jenkins-keyring.asc
-echo "deb [signed-by=/etc/apt/keyrings/jenkins-keyring.asc] https://pkg.jenkins.io/debian-stable binary/" \
+KEYRING=/etc/apt/keyrings/jenkins-keyring.asc
+: | sudo tee "$KEYRING" >/dev/null
+for year in 2023 2026; do
+  if curl -fsSL "https://pkg.jenkins.io/debian-stable/jenkins.io-${year}.key" | sudo tee -a "$KEYRING" >/dev/null; then
+    echo "Fetched Jenkins ${year} signing key"
+  else
+    echo "Note: could not fetch jenkins.io-${year}.key (skipping)"
+  fi
+done
+echo "deb [signed-by=$KEYRING] https://pkg.jenkins.io/debian-stable binary/" \
   | sudo tee /etc/apt/sources.list.d/jenkins.list >/dev/null
 
 sudo apt-get update

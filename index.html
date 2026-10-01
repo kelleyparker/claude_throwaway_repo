@@ -84,8 +84,10 @@ wsl -l -v      # confirm VERSION is 2</code></pre>
 <pre><code>./scripts/01-install-jenkins.sh</code></pre>
 <p>The script installs Java 17, Git, Docker, adds the Jenkins LTS apt repo, installs and starts Jenkins, and prints the initial admin password. Manual equivalent:</p>
 <pre><code>sudo apt update &amp;&amp; sudo apt install -y fontconfig openjdk-17-jre git docker.io
-sudo curl -fsSL https://pkg.jenkins.io/debian-stable/jenkins.io-2023.key \
-  -o /etc/apt/keyrings/jenkins-keyring.asc
+# Jenkins rotates signing keys: fetch both so apt can verify the repo
+for y in 2023 2026; do
+  curl -fsSL https://pkg.jenkins.io/debian-stable/jenkins.io-$y.key
+done | sudo tee /etc/apt/keyrings/jenkins-keyring.asc &gt;/dev/null
 echo "deb [signed-by=/etc/apt/keyrings/jenkins-keyring.asc] https://pkg.jenkins.io/debian-stable binary/" \
   | sudo tee /etc/apt/sources.list.d/jenkins.list
 sudo apt update &amp;&amp; sudo apt install -y jenkins
@@ -148,6 +150,7 @@ sudo systemctl restart jenkins</code></pre>
 <tr><td>localhost:8080 unreachable</td><td><code>sudo systemctl status jenkins</code>, <code>journalctl -u jenkins -e</code>; try the WSL IP from <code>hostname -I</code>.</td></tr>
 <tr><td><code>permission denied</code> on docker.sock</td><td><code>sudo usermod -aG docker jenkins &amp;&amp; sudo systemctl restart jenkins</code></td></tr>
 <tr><td>Out of memory / slow builds</td><td>Raise <code>memory</code> in <code>.wslconfig</code>.</td></tr>
+<tr><td><code>NO_PUBKEY</code> / "repository is not signed" on apt update</td><td>Jenkins rotated its signing key. Re-run <code>01-install-jenkins.sh</code> (it now fetches the 2023 and 2026 keys), then <code>sudo apt-get update</code>.</td></tr>
 <tr><td>Jenkins gone after WSL stops</td><td>WSL shuts down when idle; keep a terminal open or run <code>wsl -d Ubuntu --exec sleep infinity</code>.</td></tr>
 <tr><td>Slow file I/O</td><td>Keep workspaces in <code>/var/lib/jenkins</code> or <code>~</code>, not <code>/mnt/c</code>.</td></tr>
 </table>
