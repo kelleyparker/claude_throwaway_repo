@@ -4,6 +4,10 @@ set -euo pipefail
 
 [ "$(ps -p 1 -o comm=)" = "systemd" ] || { echo "Run 00-enable-systemd.sh first."; exit 1; }
 
+# A repo entry left by an earlier failed run would make this first `apt-get update`
+# abort (set -e) before the key is fixed, so drop it; it is recreated below.
+sudo rm -f /etc/apt/sources.list.d/jenkins.list
+
 sudo apt-get update
 sudo apt-get install -y fontconfig openjdk-17-jre git curl ca-certificates gnupg docker.io
 
@@ -19,6 +23,18 @@ for year in 2023 2026; do
     echo "Note: could not fetch jenkins.io-${year}.key (skipping)"
   fi
 done
+# Fallback: if the Jenkins repo is still signed with a key the downloads above did
+# not cover (7198F4B714ABFC68 at the time of writing), pull it from a keyserver.
+if ! gpg --show-keys --with-colons "$KEYRING" 2>/dev/null | grep -q '7198F4B714ABFC68'; then
+  GNUPGTMP=$(mktemp -d)
+  if gpg --homedir "$GNUPGTMP" --keyserver hkps://keyserver.ubuntu.com --recv-keys 7198F4B714ABFC68 \
+     && gpg --homedir "$GNUPGTMP" --export --armor 7198F4B714ABFC68 | sudo tee -a "$KEYRING" >/dev/null; then
+    echo "Fetched key 7198F4B714ABFC68 from keyserver"
+  else
+    echo "Note: could not fetch key 7198F4B714ABFC68 from keyserver"
+  fi
+  rm -rf "$GNUPGTMP"
+fi
 echo "deb [signed-by=$KEYRING] https://pkg.jenkins.io/debian-stable binary/" \
   | sudo tee /etc/apt/sources.list.d/jenkins.list >/dev/null
 
