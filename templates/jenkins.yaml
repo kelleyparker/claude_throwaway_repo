@@ -1,0 +1,27 @@
+# Jenkins Configuration as Code. Copy to /var/lib/jenkins/casc/jenkins.yaml and set
+# CASC_JENKINS_CONFIG=/var/lib/jenkins/casc/jenkins.yaml (see guide, step 6).
+jenkins:
+  systemMessage: "Jenkins on Ubuntu WSL"
+  numExecutors: 2
+  securityRealm:
+    local:
+      allowsSignup: false
+      users:
+        - id: "admin"
+          password: "${ADMIN_PASSWORD}"   # export before start; never commit real values
+  authorizationStrategy:
+    loggedInUsersCanDoAnything:
+      allowAnonymousRead: false
+unclassified:
+  location:
+    url: "http://localhost:8080/"
+jobs:
+  - script: >
+      multibranchPipelineJob('example') {
+        branchSources {
+          git {
+            id('example')
+            remote('https://github.com/YOUR_USER/YOUR_REPO.git')
+          }
+        }
+      }

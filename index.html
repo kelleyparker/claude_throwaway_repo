@@ -1,0 +1,182 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Jenkins CI/CD on Ubuntu WSL</title>
+<style>
+  :root{--bg:#fff;--fg:#1c2330;--muted:#5b6678;--card:#f5f7fa;--line:#dde3ec;--accent:#d33833;--code:#0f172a;--codefg:#e2e8f0}
+  @media (prefers-color-scheme:dark){:root{--bg:#10141c;--fg:#e6eaf2;--muted:#9aa5b8;--card:#171d29;--line:#27303f;--accent:#ff6b66}}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.6 system-ui,-apple-system,Segoe UI,sans-serif}
+  header{padding:48px 16px 32px;border-bottom:1px solid var(--line);text-align:center}
+  header h1{margin:0 0 8px;font-size:2rem}
+  header p{margin:0;color:var(--muted)}
+  .wrap{display:grid;grid-template-columns:220px 1fr;gap:32px;max-width:1000px;margin:0 auto;padding:24px 16px}
+  nav{position:sticky;top:16px;align-self:start;font-size:.95rem}
+  nav a{display:block;padding:4px 0;color:var(--muted);text-decoration:none}
+  nav a:hover{color:var(--accent)}
+  section{margin-bottom:40px}
+  h2{border-bottom:2px solid var(--accent);padding-bottom:4px}
+  table{border-collapse:collapse;width:100%;font-size:.95rem}
+  th,td{border:1px solid var(--line);padding:8px 10px;text-align:left}
+  th{background:var(--card)}
+  pre{background:var(--code);color:var(--codefg);padding:14px;border-radius:8px;overflow:auto;position:relative;font-size:.88rem}
+  code{font-family:ui-monospace,Menlo,Consolas,monospace}
+  :not(pre)>code{background:var(--card);padding:1px 5px;border-radius:4px}
+  .note{background:var(--card);border-left:4px solid var(--accent);padding:10px 14px;border-radius:4px}
+  button.copy{position:absolute;top:6px;right:6px;font-size:.75rem;padding:2px 8px;border-radius:4px;border:0;cursor:pointer}
+  .files a{color:var(--accent)}
+  @media(max-width:760px){.wrap{grid-template-columns:1fr}nav{position:static;display:flex;flex-wrap:wrap;gap:12px}}
+</style>
+</head>
+<body>
+<header>
+  <h1>Jenkins CI/CD on Ubuntu WSL</h1>
+  <p>A brief setup guide: requirements, commands, scripts and templates.</p>
+</header>
+<div class="wrap">
+<nav>
+  <a href="#reqs">1. Requirements</a>
+  <a href="#systemd">2. Enable systemd</a>
+  <a href="#install">3. Install Jenkins</a>
+  <a href="#unlock">4. First-time setup</a>
+  <a href="#plugins">5. Plugins</a>
+  <a href="#pipeline">6. First pipeline</a>
+  <a href="#casc">7. Config as Code</a>
+  <a href="#webhooks">8. Webhooks</a>
+  <a href="#trouble">9. Troubleshooting</a>
+  <a href="#files">Files in this repo</a>
+</nav>
+<main>
+
+<section id="reqs">
+<h2>1. System requirements</h2>
+<table>
+<tr><th>Item</th><th>Minimum</th><th>Recommended</th></tr>
+<tr><td>Windows</td><td>Windows 10 22H2 / 11 with WSL2</td><td>Windows 11</td></tr>
+<tr><td>Distro</td><td>Ubuntu 22.04 (WSL2, not WSL1)</td><td>Ubuntu 24.04</td></tr>
+<tr><td>RAM given to WSL</td><td>4 GB</td><td>6–8 GB</td></tr>
+<tr><td>CPU</td><td>2 cores</td><td>4 cores</td></tr>
+<tr><td>Disk</td><td>10 GB free</td><td>30 GB+ (Docker images/workspaces)</td></tr>
+<tr><td>Java</td><td>JDK/JRE 17 or 21</td><td>OpenJDK 17</td></tr>
+<tr><td>Other</td><td>systemd enabled, git, curl</td><td>Docker engine</td></tr>
+</table>
+<p>Install WSL from PowerShell (admin) if needed:</p>
+<pre><code>wsl --install -d Ubuntu-24.04
+wsl --set-default-version 2
+wsl -l -v      # confirm VERSION is 2</code></pre>
+<p>Optionally cap resources with <code>%UserProfile%\.wslconfig</code> (template: <code>templates/.wslconfig</code>).</p>
+</section>
+
+<section id="systemd">
+<h2>2. Enable systemd</h2>
+<p>Jenkins runs as a service, so WSL needs systemd. Inside Ubuntu:</p>
+<pre><code>git clone &lt;this-repo&gt; &amp;&amp; cd claude_throwaway_repo
+./scripts/00-enable-systemd.sh</code></pre>
+<p>Then in <strong>PowerShell</strong>:</p>
+<pre><code>wsl --shutdown</code></pre>
+<p>Reopen Ubuntu and confirm: <code>ps -p 1 -o comm=</code> prints <code>systemd</code>.</p>
+</section>
+
+<section id="install">
+<h2>3. Install Jenkins</h2>
+<pre><code>./scripts/01-install-jenkins.sh</code></pre>
+<p>The script installs Java 17, Git, Docker, adds the Jenkins LTS apt repo, installs and starts Jenkins, and prints the initial admin password. Manual equivalent:</p>
+<pre><code>sudo apt update &amp;&amp; sudo apt install -y fontconfig openjdk-17-jre git docker.io
+sudo curl -fsSL https://pkg.jenkins.io/debian-stable/jenkins.io-2023.key \
+  -o /etc/apt/keyrings/jenkins-keyring.asc
+echo "deb [signed-by=/etc/apt/keyrings/jenkins-keyring.asc] https://pkg.jenkins.io/debian-stable binary/" \
+  | sudo tee /etc/apt/sources.list.d/jenkins.list
+sudo apt update &amp;&amp; sudo apt install -y jenkins
+sudo usermod -aG docker jenkins
+sudo systemctl enable --now jenkins</code></pre>
+</section>
+
+<section id="unlock">
+<h2>4. First-time setup</h2>
+<ol>
+<li>Open <a href="http://localhost:8080">http://localhost:8080</a> in your Windows browser (WSL2 forwards localhost).</li>
+<li>Paste the password: <code>sudo cat /var/lib/jenkins/secrets/initialAdminPassword</code></li>
+<li>Choose <em>Install suggested plugins</em>, create an admin user, confirm the URL.</li>
+<li>Run <code>./scripts/03-verify.sh</code> to health-check the install.</li>
+</ol>
+<p class="note">Changed the port? Edit <code>Environment="JENKINS_PORT=..."</code> via <code>sudo systemctl edit jenkins</code>, then restart.</p>
+</section>
+
+<section id="plugins">
+<h2>5. Plugins</h2>
+<p>Create an API token (<em>User → Security → API Token</em>), then:</p>
+<pre><code>export JENKINS_USER=admin JENKINS_TOKEN=&lt;token&gt;
+./scripts/02-install-plugins.sh</code></pre>
+<p>The list lives in <code>templates/plugins.txt</code> (Pipeline, Git, Docker Pipeline, GitHub, Configuration as Code, Blue Ocean, …).</p>
+</section>
+
+<section id="pipeline">
+<h2>6. Your first pipeline</h2>
+<ol>
+<li>Copy <code>templates/Jenkinsfile</code> to the root of your project repo and push.</li>
+<li>Jenkins → <em>New Item → Multibranch Pipeline</em> → add your Git repo as a branch source.</li>
+<li>Click <em>Scan Repository Now</em>; builds run for every branch with a Jenkinsfile.</li>
+</ol>
+<p>The template has Checkout → Build → Test → Docker Build → Deploy (main only), timeouts, log rotation and workspace cleanup.</p>
+</section>
+
+<section id="casc">
+<h2>7. Config as Code (optional)</h2>
+<p>Make the setup reproducible with <code>templates/jenkins.yaml</code>:</p>
+<pre><code>sudo mkdir -p /var/lib/jenkins/casc
+sudo cp templates/jenkins.yaml /var/lib/jenkins/casc/
+sudo systemctl edit jenkins
+#   [Service]
+#   Environment="CASC_JENKINS_CONFIG=/var/lib/jenkins/casc/jenkins.yaml"
+#   Environment="ADMIN_PASSWORD=change-me"
+#   Environment="JAVA_OPTS=-Djenkins.install.runSetupWizard=false"
+sudo systemctl restart jenkins</code></pre>
+</section>
+
+<section id="webhooks">
+<h2>8. Webhooks from GitHub</h2>
+<p>GitHub can't reach <code>localhost</code>. Either use <code>pollSCM</code> (the template default) or expose Jenkins with a tunnel such as <code>cloudflared tunnel --url http://localhost:8080</code> or ngrok, then add a webhook to <code>&lt;tunnel-url&gt;/github-webhook/</code>. Only expose Jenkins with authentication enabled.</p>
+</section>
+
+<section id="trouble">
+<h2>9. Troubleshooting</h2>
+<table>
+<tr><th>Symptom</th><th>Fix</th></tr>
+<tr><td><code>System has not been booted with systemd</code></td><td>Step 2; ensure WSL2 and run <code>wsl --shutdown</code>.</td></tr>
+<tr><td>localhost:8080 unreachable</td><td><code>sudo systemctl status jenkins</code>, <code>journalctl -u jenkins -e</code>; try the WSL IP from <code>hostname -I</code>.</td></tr>
+<tr><td><code>permission denied</code> on docker.sock</td><td><code>sudo usermod -aG docker jenkins &amp;&amp; sudo systemctl restart jenkins</code></td></tr>
+<tr><td>Out of memory / slow builds</td><td>Raise <code>memory</code> in <code>.wslconfig</code>.</td></tr>
+<tr><td>Jenkins gone after WSL stops</td><td>WSL shuts down when idle; keep a terminal open or run <code>wsl -d Ubuntu --exec sleep infinity</code>.</td></tr>
+<tr><td>Slow file I/O</td><td>Keep workspaces in <code>/var/lib/jenkins</code> or <code>~</code>, not <code>/mnt/c</code>.</td></tr>
+</table>
+</section>
+
+<section id="files" class="files">
+<h2>Files in this repo</h2>
+<table>
+<tr><th>Path</th><th>Purpose</th></tr>
+<tr><td><a href="scripts/00-enable-systemd.sh">scripts/00-enable-systemd.sh</a></td><td>Enable systemd in WSL</td></tr>
+<tr><td><a href="scripts/01-install-jenkins.sh">scripts/01-install-jenkins.sh</a></td><td>Install Java, Docker, Jenkins</td></tr>
+<tr><td><a href="scripts/02-install-plugins.sh">scripts/02-install-plugins.sh</a></td><td>Bulk plugin install</td></tr>
+<tr><td><a href="scripts/03-verify.sh">scripts/03-verify.sh</a></td><td>Health check</td></tr>
+<tr><td><a href="templates/Jenkinsfile">templates/Jenkinsfile</a></td><td>Declarative pipeline template</td></tr>
+<tr><td><a href="templates/jenkins.yaml">templates/jenkins.yaml</a></td><td>Configuration as Code</td></tr>
+<tr><td><a href="templates/plugins.txt">templates/plugins.txt</a></td><td>Plugin list</td></tr>
+<tr><td><a href="templates/wsl.conf">templates/wsl.conf</a>, <a href="templates/.wslconfig">.wslconfig</a></td><td>WSL settings</td></tr>
+<tr><td><a href="templates/Dockerfile.example">templates/Dockerfile.example</a></td><td>Sample Dockerfile</td></tr>
+</table>
+</section>
+
+</main>
+</div>
+<script>
+document.querySelectorAll('pre').forEach(function(pre){
+  var b=document.createElement('button');b.className='copy';b.textContent='Copy';
+  b.onclick=function(){navigator.clipboard.writeText(pre.innerText.replace(/Copy$/,'').trim()).then(function(){b.textContent='Copied';setTimeout(function(){b.textContent='Copy'},1200)})};
+  pre.appendChild(b);
+});
+</script>
+</body>
+</html>

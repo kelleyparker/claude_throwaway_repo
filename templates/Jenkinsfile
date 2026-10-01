@@ -1,0 +1,46 @@
+// Declarative pipeline template. Commit as `Jenkinsfile` in the root of your repo.
+pipeline {
+  agent any
+
+  options {
+    timestamps()
+    timeout(time: 30, unit: 'MINUTES')
+    buildDiscarder(logRotator(numToKeepStr: '20'))
+    disableConcurrentBuilds()
+  }
+
+  triggers {
+    pollSCM('H/5 * * * *')   // swap for a GitHub webhook when reachable (see guide)
+  }
+
+  environment {
+    IMAGE = "myapp:${env.BUILD_NUMBER}"
+  }
+
+  stages {
+    stage('Checkout') {
+      steps { checkout scm }
+    }
+    stage('Build') {
+      steps { sh 'echo "replace with: make build / npm ci && npm run build"' }
+    }
+    stage('Test') {
+      steps { sh 'echo "replace with: make test / npm test"' }
+      post { always { junit allowEmptyResults: true, testResults: '**/test-results/*.xml' } }
+    }
+    stage('Docker Build') {
+      when { expression { fileExists('Dockerfile') } }
+      steps { sh 'docker build -t "$IMAGE" .' }
+    }
+    stage('Deploy') {
+      when { branch 'main' }
+      steps { sh 'echo "replace with deploy command"' }
+    }
+  }
+
+  post {
+    success { echo 'Build succeeded' }
+    failure { echo 'Build failed' }
+    cleanup { cleanWs() }
+  }
+}

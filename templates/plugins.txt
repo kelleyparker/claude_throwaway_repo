@@ -1,0 +1,12 @@
+# One plugin ID per line
+git
+workflow-aggregator
+pipeline-stage-view
+docker-workflow
+credentials-binding
+configuration-as-code
+github
+github-branch-source
+blueocean
+timestamper
+ws-cleanup
