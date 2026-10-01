@@ -4,7 +4,7 @@ set -u
 ok(){ echo "[ OK ] $*"; }; bad(){ echo "[FAIL] $*"; }
 
 [ "$(ps -p 1 -o comm=)" = "systemd" ] && ok "systemd running" || bad "systemd not running"
-java -version 2>&1 | head -1 | grep -q '17' && ok "Java 17" || bad "Java 17 missing"
+java -version 2>&1 | head -1 | grep -Eq '"(21|25)\.' && ok "Java 21+" || bad "Java 21+ required"
 systemctl is-active --quiet jenkins && ok "jenkins service active" || bad "jenkins service not active"
 curl -s -o /dev/null -w '%{http_code}' http://localhost:8080/login | grep -q 200 \
   && ok "Web UI answers on :8080" || bad "Web UI not reachable"

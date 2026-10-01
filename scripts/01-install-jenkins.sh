@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Installs Java 17, Jenkins LTS, Git and Docker CLI/engine on Ubuntu WSL2.
+# Installs Java 21, Jenkins LTS, Git and Docker CLI/engine on Ubuntu WSL2.
 set -euo pipefail
 
 [ "$(ps -p 1 -o comm=)" = "systemd" ] || { echo "Run 00-enable-systemd.sh first."; exit 1; }
@@ -9,7 +9,7 @@ set -euo pipefail
 sudo rm -f /etc/apt/sources.list.d/jenkins.list
 
 sudo apt-get update
-sudo apt-get install -y fontconfig openjdk-17-jre git curl ca-certificates gnupg docker.io
+sudo apt-get install -y fontconfig openjdk-21-jre git curl ca-certificates gnupg docker.io
 
 # Jenkins LTS apt repo. Jenkins rotates its signing key, so fetch every published
 # key (apt accepts a Release signed by any key in the keyring).
@@ -44,6 +44,10 @@ sudo apt-get install -y jenkins
 # Let Jenkins (and you) use Docker
 sudo usermod -aG docker jenkins
 sudo usermod -aG docker "$USER"
+
+# Jenkins needs Java 21+; make sure it is the default even if an older JDK is present
+JAVA21="$(update-alternatives --list java | grep -- '-21-' | head -1 || true)"
+[ -n "$JAVA21" ] && sudo update-alternatives --set java "$JAVA21"
 
 sudo systemctl enable --now docker
 sudo systemctl enable --now jenkins
