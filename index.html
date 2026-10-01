@@ -59,7 +59,7 @@
 <tr><td>RAM given to WSL</td><td>4 GB</td><td>6–8 GB</td></tr>
 <tr><td>CPU</td><td>2 cores</td><td>4 cores</td></tr>
 <tr><td>Disk</td><td>10 GB free</td><td>30 GB+ (Docker images/workspaces)</td></tr>
-<tr><td>Java</td><td>JDK/JRE 17 or 21</td><td>OpenJDK 17</td></tr>
+<tr><td>Java</td><td>JDK/JRE 21 or 25</td><td>OpenJDK 21</td></tr>
 <tr><td>Other</td><td>systemd enabled, git, curl</td><td>Docker engine</td></tr>
 </table>
 <p>Install WSL from PowerShell (admin) if needed:</p>
@@ -82,8 +82,8 @@ wsl -l -v      # confirm VERSION is 2</code></pre>
 <section id="install">
 <h2>3. Install Jenkins</h2>
 <pre><code>./scripts/01-install-jenkins.sh</code></pre>
-<p>The script installs Java 17, Git, Docker, adds the Jenkins LTS apt repo, installs and starts Jenkins, and prints the initial admin password. Manual equivalent:</p>
-<pre><code>sudo apt update &amp;&amp; sudo apt install -y fontconfig openjdk-17-jre git docker.io
+<p>The script installs Java 21, Git, Docker, adds the Jenkins LTS apt repo, installs and starts Jenkins, and prints the initial admin password. Manual equivalent:</p>
+<pre><code>sudo apt update &amp;&amp; sudo apt install -y fontconfig openjdk-21-jre git docker.io
 # Jenkins rotates signing keys: fetch both so apt can verify the repo
 for y in 2023 2026; do
   curl -fsSL https://pkg.jenkins.io/debian-stable/jenkins.io-$y.key
@@ -150,6 +150,7 @@ sudo systemctl restart jenkins</code></pre>
 <tr><td>localhost:8080 unreachable</td><td><code>sudo systemctl status jenkins</code>, <code>journalctl -u jenkins -e</code>; try the WSL IP from <code>hostname -I</code>.</td></tr>
 <tr><td><code>permission denied</code> on docker.sock</td><td><code>sudo usermod -aG docker jenkins &amp;&amp; sudo systemctl restart jenkins</code></td></tr>
 <tr><td>Out of memory / slow builds</td><td>Raise <code>memory</code> in <code>.wslconfig</code>.</td></tr>
+<tr><td>Jenkins service fails instantly; log says "older than the minimum required version (Java 21)"</td><td><code>sudo apt-get install -y openjdk-21-jre</code>, set it as default with <code>sudo update-alternatives --config java</code>, then <code>sudo systemctl reset-failed jenkins &amp;&amp; sudo systemctl restart jenkins</code>.</td></tr>
 <tr><td><code>NO_PUBKEY</code> / "repository is not signed" on apt update</td><td>Jenkins rotated its signing key. Re-run <code>01-install-jenkins.sh</code> (it now fetches the 2023 and 2026 keys), then <code>sudo apt-get update</code>.</td></tr>
 <tr><td>Jenkins gone after WSL stops</td><td>WSL shuts down when idle; keep a terminal open or run <code>wsl -d Ubuntu --exec sleep infinity</code>.</td></tr>
 <tr><td>Slow file I/O</td><td>Keep workspaces in <code>/var/lib/jenkins</code> or <code>~</code>, not <code>/mnt/c</code>.</td></tr>
@@ -161,7 +162,7 @@ sudo systemctl restart jenkins</code></pre>
 <table>
 <tr><th>Path</th><th>Purpose</th></tr>
 <tr><td><a href="scripts/00-enable-systemd.sh">scripts/00-enable-systemd.sh</a></td><td>Enable systemd in WSL</td></tr>
-<tr><td><a href="scripts/01-install-jenkins.sh">scripts/01-install-jenkins.sh</a></td><td>Install Java, Docker, Jenkins</td></tr>
+<tr><td><a href="scripts/01-install-jenkins.sh">scripts/01-install-jenkins.sh</a></td><td>Install Java 21, Docker, Jenkins</td></tr>
 <tr><td><a href="scripts/02-install-plugins.sh">scripts/02-install-plugins.sh</a></td><td>Bulk plugin install</td></tr>
 <tr><td><a href="scripts/03-verify.sh">scripts/03-verify.sh</a></td><td>Health check</td></tr>
 <tr><td><a href="templates/Jenkinsfile">templates/Jenkinsfile</a></td><td>Declarative pipeline template</td></tr>

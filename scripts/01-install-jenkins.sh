@@ -1,11 +1,15 @@
 #!/usr/bin/env bash
-# Installs Java 17, Jenkins LTS, Git and Docker CLI/engine on Ubuntu WSL2.
+# Installs Java 21, Jenkins LTS, Git and Docker CLI/engine on Ubuntu WSL2.
 set -euo pipefail
 
 [ "$(ps -p 1 -o comm=)" = "systemd" ] || { echo "Run 00-enable-systemd.sh first."; exit 1; }
 
+# A repo entry left by an earlier failed run would make this first `apt-get update`
+# abort (set -e) before the key is fixed, so drop it; it is recreated below.
+sudo rm -f /etc/apt/sources.list.d/jenkins.list
+
 sudo apt-get update
-sudo apt-get install -y fontconfig openjdk-17-jre git curl ca-certificates gnupg docker.io
+sudo apt-get install -y fontconfig openjdk-21-jre git curl ca-certificates gnupg docker.io
 
 # Jenkins LTS apt repo. Jenkins rotates its signing key, so fetch every published
 # key (apt accepts a Release signed by any key in the keyring).
@@ -19,6 +23,18 @@ for year in 2023 2026; do
     echo "Note: could not fetch jenkins.io-${year}.key (skipping)"
   fi
 done
+# Fallback: if the Jenkins repo is still signed with a key the downloads above did
+# not cover (7198F4B714ABFC68 at the time of writing), pull it from a keyserver.
+if ! gpg --show-keys --with-colons "$KEYRING" 2>/dev/null | grep -q '7198F4B714ABFC68'; then
+  GNUPGTMP=$(mktemp -d)
+  if gpg --homedir "$GNUPGTMP" --keyserver hkps://keyserver.ubuntu.com --recv-keys 7198F4B714ABFC68 \
+     && gpg --homedir "$GNUPGTMP" --export --armor 7198F4B714ABFC68 | sudo tee -a "$KEYRING" >/dev/null; then
+    echo "Fetched key 7198F4B714ABFC68 from keyserver"
+  else
+    echo "Note: could not fetch key 7198F4B714ABFC68 from keyserver"
+  fi
+  rm -rf "$GNUPGTMP"
+fi
 echo "deb [signed-by=$KEYRING] https://pkg.jenkins.io/debian-stable binary/" \
   | sudo tee /etc/apt/sources.list.d/jenkins.list >/dev/null
 
@@ -28,6 +44,10 @@ sudo apt-get install -y jenkins
 # Let Jenkins (and you) use Docker
 sudo usermod -aG docker jenkins
 sudo usermod -aG docker "$USER"
+
+# Jenkins needs Java 21+; make sure it is the default even if an older JDK is present
+JAVA21="$(update-alternatives --list java | grep -- '-21-' | head -1 || true)"
+[ -n "$JAVA21" ] && sudo update-alternatives --set java "$JAVA21"
 
 sudo systemctl enable --now docker
 sudo systemctl enable --now jenkins
